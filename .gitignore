@@ -1,1 +1,24 @@
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+venv/
+
+# uv
+.python-version
+
+# macOS
+.DS_Store
+
+# VS Code
+.vscode/
+
+# Logs
+*.log
 game_state.jsonl
+
+# Personal notes
+Learning Goals.txt
+Venv.txt
