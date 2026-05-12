@@ -1,0 +1,4 @@
+uv init --python 3.13 --app
+cd your-project-name
+
+uv venv
