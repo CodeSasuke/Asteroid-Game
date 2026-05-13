@@ -1,5 +1,5 @@
 from circleshape import CircleShape
-from constants import PLAYER_RADIUS, LINE_WIDTH, PLAYER_SPEED, PLAYER_TURN_SPEED
+from constants import PLAYER_RADIUS, LINE_WIDTH, PLAYER_SPEED, PLAYER_TURN_SPEED,SCREEN_WIDTH, SCREEN_HEIGHT
 import pygame
 
 class Player(CircleShape):
@@ -41,3 +41,5 @@ class Player(CircleShape):
         rotated_vector = unit_vector.rotate(self.rotation)
         rotated_with_speed_vector = rotated_vector * PLAYER_SPEED * dt
         self.position += rotated_with_speed_vector
+        self.position.x = max(self.radius, min(SCREEN_WIDTH - self.radius, self.position.x))
+        self.position.y = max(self.radius, min(SCREEN_HEIGHT - self.radius, self.position.y))
