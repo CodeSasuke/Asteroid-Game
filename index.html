@@ -1,0 +1,1202 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+
+    <title>Asteroids — Siddhant Bhardwaj</title>
+
+    <style>
+        html,
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #000;
+            font-family: Arial, sans-serif;
+            touch-action: none;
+        }
+
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            background: black;
+        }
+
+        /* =========================================================
+   UI
+========================================================= */
+
+        #ui {
+            position: fixed;
+            top: 10px;
+            left: 12px;
+
+            color: white;
+
+            z-index: 10;
+
+            font-size: 18px;
+
+            user-select: none;
+        }
+
+        /* =========================================================
+   MOBILE CONTROLS
+========================================================= */
+
+        #mobileControls {
+
+            position: fixed;
+
+            bottom: 18px;
+
+            width: 100%;
+
+            display: none;
+
+            justify-content: space-around;
+
+            align-items: center;
+
+            z-index: 20;
+
+            pointer-events: none;
+        }
+
+        /* show controls only on touch devices */
+
+        @media (hover: none) and (pointer: coarse) {
+
+            #mobileControls {
+
+                display: flex;
+            }
+        }
+
+        .btn {
+
+            width: 72px;
+            height: 72px;
+
+            border-radius: 50%;
+
+            border: 2px solid rgba(255, 255, 255, 0.7);
+
+            background: rgba(255, 255, 255, 0.08);
+
+            color: white;
+
+            font-size: 26px;
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            pointer-events: auto;
+
+            user-select: none;
+
+            backdrop-filter: blur(4px);
+        }
+
+        /* =========================================================
+   SIGNATURE
+========================================================= */
+
+        #signature {
+
+            position: fixed;
+
+            right: 12px;
+            bottom: 10px;
+
+            z-index: 30;
+
+            font-size: 11px;
+
+            letter-spacing: 1px;
+
+            color: rgba(255, 255, 255, 0.35);
+
+            font-family: monospace;
+
+            user-select: none;
+        }
+
+        #signature a {
+
+            color: rgba(255, 255, 255, 0.5);
+
+            text-decoration: none;
+        }
+
+        #signature a:hover {
+            text-decoration: underline;
+        }
+
+        /* =========================================================
+   GAME OVER
+========================================================= */
+
+        #gameOver {
+
+            position: fixed;
+
+            inset: 0;
+
+            display: none;
+
+            justify-content: center;
+            align-items: center;
+
+            flex-direction: column;
+
+            background: rgba(0, 0, 0, 0.7);
+
+            color: white;
+
+            z-index: 50;
+        }
+
+        #gameOver h1 {
+            font-size: 56px;
+            margin: 0;
+        }
+
+        #gameOver p {
+            font-size: 22px;
+        }
+
+        #gameOver button {
+
+            margin-top: 20px;
+
+            padding: 12px 24px;
+
+            border: 2px solid white;
+
+            background: transparent;
+
+            color: white;
+
+            cursor: pointer;
+
+            font-size: 18px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="ui">
+        Score:
+        <span id="score">0</span>
+
+        |
+
+        Lives:
+        <span id="lives">3</span>
+
+        |
+
+        Level:
+        <span id="level">1</span>
+    </div>
+
+    <canvas id="game"></canvas>
+
+    <div id="mobileControls">
+
+        <div class="btn" id="leftBtn">◀</div>
+
+        <div class="btn" id="thrustBtn">▲</div>
+
+        <div class="btn" id="rightBtn">▶</div>
+
+        <div class="btn" id="fireBtn">●</div>
+
+    </div>
+
+    <div id="signature">
+        SB /
+        <a href="https://siddhantbhardwaj.com" target="_blank">
+            siddhantbhardwaj.com
+        </a>
+    </div>
+
+    <div id="gameOver">
+
+        <h1>GAME OVER</h1>
+
+        <p id="finalScore"></p>
+
+        <button onclick="restartGame()">
+            Restart
+        </button>
+
+    </div>
+
+    <script type="module">
+
+        /* =========================================================
+           CANVAS + WEBGL
+        ========================================================= */
+
+        const canvas = document.getElementById("game");
+
+        const gl = canvas.getContext("webgl");
+
+        if (!gl) {
+            alert("WebGL unsupported");
+        }
+
+        function resize() {
+
+            canvas.width = innerWidth;
+            canvas.height = innerHeight;
+
+            gl.viewport(
+                0,
+                0,
+                canvas.width,
+                canvas.height
+            );
+        }
+
+        window.addEventListener("resize", resize);
+
+        resize();
+
+        /* =========================================================
+           UI
+        ========================================================= */
+
+        const scoreEl = document.getElementById("score");
+        const livesEl = document.getElementById("lives");
+        const levelEl = document.getElementById("level");
+
+        const gameOverEl = document.getElementById("gameOver");
+        const finalScoreEl = document.getElementById("finalScore");
+
+        /* =========================================================
+           AUDIO
+        ========================================================= */
+
+        const audioCtx =
+            new (
+                window.AudioContext ||
+                window.webkitAudioContext
+            )();
+
+        function beep(
+            frequency,
+            duration,
+            type = "square",
+            volume = 0.03
+        ) {
+
+            const osc = audioCtx.createOscillator();
+
+            const gain = audioCtx.createGain();
+
+            osc.type = type;
+
+            osc.frequency.value = frequency;
+
+            gain.gain.value = volume;
+
+            osc.connect(gain);
+
+            gain.connect(audioCtx.destination);
+
+            osc.start();
+
+            osc.stop(
+                audioCtx.currentTime + duration
+            );
+        }
+
+        /* =========================================================
+           GAME STATE
+        ========================================================= */
+
+        let score = 0;
+        let lives = 3;
+        let level = 1;
+
+        let running = true;
+
+        const keys = {};
+
+        /* =========================================================
+           INPUT
+        ========================================================= */
+
+        document.addEventListener("keydown", e => {
+
+            keys[e.code] = true;
+
+            if (e.code === "Space") {
+                fireBullet();
+            }
+        });
+
+        document.addEventListener("keyup", e => {
+
+            keys[e.code] = false;
+        });
+
+        /* =========================================================
+           MOBILE
+        ========================================================= */
+
+        function bindButton(id, key) {
+
+            const btn = document.getElementById(id);
+
+            btn.addEventListener("touchstart", e => {
+
+                e.preventDefault();
+
+                keys[key] = true;
+
+                if (key === "Space") {
+                    fireBullet();
+                }
+            });
+
+            btn.addEventListener("touchend", e => {
+
+                e.preventDefault();
+
+                keys[key] = false;
+            });
+        }
+
+        bindButton("leftBtn", "ArrowLeft");
+        bindButton("rightBtn", "ArrowRight");
+        bindButton("thrustBtn", "ArrowUp");
+        bindButton("fireBtn", "Space");
+
+        /* =========================================================
+           ECS
+        ========================================================= */
+
+        let entityId = 0;
+
+        class ECS {
+
+            constructor() {
+
+                this.entities = new Set();
+
+                this.components = {};
+            }
+
+            create() {
+
+                const id = entityId++;
+
+                this.entities.add(id);
+
+                return id;
+            }
+
+            add(id, name, data) {
+
+                if (!this.components[name]) {
+
+                    this.components[name] =
+                        new Map();
+                }
+
+                this.components[name]
+                    .set(id, data);
+            }
+
+            get(name) {
+
+                return this.components[name]
+                    || new Map();
+            }
+        }
+
+        const ecs = new ECS();
+
+        /* =========================================================
+           PLAYER
+        ========================================================= */
+
+        const player = ecs.create();
+
+        ecs.add(player, "transform", {
+
+            x: canvas.width / 2,
+
+            y: canvas.height / 2,
+
+            rotation: 0
+        });
+
+        ecs.add(player, "velocity", {
+
+            x: 0,
+
+            y: 0
+        });
+
+        ecs.add(player, "player", {
+
+            radius: 12,
+
+            invuln: 0
+        });
+
+        /* =========================================================
+           POOLS
+        ========================================================= */
+
+        const bulletPool = [];
+        const particlePool = [];
+
+        function getBullet() {
+
+            return bulletPool.pop() || {};
+        }
+
+        function releaseBullet(b) {
+
+            bulletPool.push(b);
+        }
+
+        function getParticle() {
+
+            return particlePool.pop() || {};
+        }
+
+        function releaseParticle(p) {
+
+            particlePool.push(p);
+        }
+
+        /* =========================================================
+           ASTEROIDS
+        ========================================================= */
+
+        const asteroids = [];
+
+        function createAsteroid(
+            x,
+            y,
+            size = 60
+        ) {
+
+            const verts = [];
+
+            for (let i = 0; i < 12; i++) {
+
+                const angle =
+                    (Math.PI * 2 / 12) * i;
+
+                const radius =
+                    size +
+                    (Math.random() - 0.5)
+                    * size
+                    * 0.35;
+
+                verts.push({
+
+                    x:
+                        Math.cos(angle)
+                        * radius,
+
+                    y:
+                        Math.sin(angle)
+                        * radius
+                });
+            }
+
+            asteroids.push({
+
+                x,
+                y,
+
+                vx:
+                    (Math.random() - 0.5)
+                    * 140,
+
+                vy:
+                    (Math.random() - 0.5)
+                    * 140,
+
+                size,
+
+                verts
+            });
+        }
+
+        function nextLevel() {
+
+            level++;
+
+            levelEl.textContent = level;
+
+            for (
+                let i = 0;
+                i < level + 3;
+                i++
+            ) {
+
+                createAsteroid(
+
+                    Math.random()
+                    * canvas.width,
+
+                    Math.random()
+                    * canvas.height,
+
+                    30 + Math.random() * 50
+                );
+            }
+        }
+
+        /* =========================================================
+           START LEVEL
+        ========================================================= */
+
+        nextLevel();
+
+        /* =========================================================
+           BULLETS
+        ========================================================= */
+
+        const bullets = [];
+
+        function fireBullet() {
+
+            if (!running) return;
+
+            beep(700, 0.04);
+
+            const t =
+                ecs.get("transform")
+                    .get(player);
+
+            const v =
+                ecs.get("velocity")
+                    .get(player);
+
+            const b = getBullet();
+
+            b.x = t.x;
+            b.y = t.y;
+
+            b.vx =
+                Math.cos(t.rotation)
+                * 520
+                + v.x;
+
+            b.vy =
+                Math.sin(t.rotation)
+                * 520
+                + v.y;
+
+            b.life = 1.2;
+
+            bullets.push(b);
+        }
+
+        /* =========================================================
+           PARTICLES
+        ========================================================= */
+
+        const particles = [];
+
+        function explosion(x, y) {
+
+            beep(
+                140,
+                0.15,
+                "sawtooth"
+            );
+
+            for (let i = 0; i < 28; i++) {
+
+                const p = getParticle();
+
+                const angle =
+                    Math.random()
+                    * Math.PI
+                    * 2;
+
+                const speed =
+                    Math.random()
+                    * 220;
+
+                p.x = x;
+                p.y = y;
+
+                p.vx =
+                    Math.cos(angle)
+                    * speed;
+
+                p.vy =
+                    Math.sin(angle)
+                    * speed;
+
+                p.life = 1;
+
+                particles.push(p);
+            }
+        }
+
+        /* =========================================================
+           MULTIPLAYER SKELETON
+        ========================================================= */
+
+        try {
+
+            const socket =
+                new WebSocket(
+                    "ws://localhost:8080"
+                );
+
+            socket.onopen = () => {
+
+                console.log(
+                    "multiplayer connected"
+                );
+            };
+
+        } catch (err) {
+
+            console.log(
+                "multiplayer unavailable"
+            );
+        }
+
+        /* =========================================================
+           SPATIAL HASH
+        ========================================================= */
+
+        const GRID = 120;
+
+        function spatialHash(x, y) {
+
+            return `
+        ${Math.floor(x / GRID)}
+        :
+        ${Math.floor(y / GRID)}
+    `;
+        }
+
+        /* =========================================================
+           WRAP
+        ========================================================= */
+
+        function wrap(obj) {
+
+            if (obj.x < 0)
+                obj.x += canvas.width;
+
+            if (obj.x > canvas.width)
+                obj.x -= canvas.width;
+
+            if (obj.y < 0)
+                obj.y += canvas.height;
+
+            if (obj.y > canvas.height)
+                obj.y -= canvas.height;
+        }
+
+        /* =========================================================
+           UPDATE
+        ========================================================= */
+
+        function update(dt) {
+
+            if (!running) return;
+
+            const t =
+                ecs.get("transform")
+                    .get(player);
+
+            const v =
+                ecs.get("velocity")
+                    .get(player);
+
+            const pdata =
+                ecs.get("player")
+                    .get(player);
+
+            /* movement */
+
+            if (keys["ArrowLeft"]) {
+
+                t.rotation -= 4 * dt;
+            }
+
+            if (keys["ArrowRight"]) {
+
+                t.rotation += 4 * dt;
+            }
+
+            if (keys["ArrowUp"]) {
+
+                v.x +=
+                    Math.cos(t.rotation)
+                    * 320
+                    * dt;
+
+                v.y +=
+                    Math.sin(t.rotation)
+                    * 320
+                    * dt;
+            }
+
+            v.x *= 0.992;
+            v.y *= 0.992;
+
+            t.x += v.x * dt;
+            t.y += v.y * dt;
+
+            wrap(t);
+
+            pdata.invuln -= dt;
+
+            /* bullets */
+
+            for (
+                let i = bullets.length - 1;
+                i >= 0;
+                i--
+            ) {
+
+                const b = bullets[i];
+
+                b.x += b.vx * dt;
+                b.y += b.vy * dt;
+
+                wrap(b);
+
+                b.life -= dt;
+
+                if (b.life <= 0) {
+
+                    releaseBullet(b);
+
+                    bullets.splice(i, 1);
+                }
+            }
+
+            /* particles */
+
+            for (
+                let i = particles.length - 1;
+                i >= 0;
+                i--
+            ) {
+
+                const p = particles[i];
+
+                p.x += p.vx * dt;
+                p.y += p.vy * dt;
+
+                p.life -= dt;
+
+                if (p.life <= 0) {
+
+                    releaseParticle(p);
+
+                    particles.splice(i, 1);
+                }
+            }
+
+            /* asteroids */
+
+            for (
+                let i = asteroids.length - 1;
+                i >= 0;
+                i--
+            ) {
+
+                const a = asteroids[i];
+
+                a.x += a.vx * dt;
+                a.y += a.vy * dt;
+
+                wrap(a);
+
+                /* player collision */
+
+                const dx = t.x - a.x;
+                const dy = t.y - a.y;
+
+                const dist =
+                    Math.hypot(dx, dy);
+
+                if (
+                    dist < a.size
+                    &&
+                    pdata.invuln <= 0
+                ) {
+
+                    lives--;
+
+                    livesEl.textContent =
+                        lives;
+
+                    pdata.invuln = 2.5;
+
+                    explosion(t.x, t.y);
+
+                    beep(90, 0.3);
+
+                    if (lives <= 0) {
+
+                        gameOver();
+                    }
+                }
+
+                /* bullets */
+
+                for (
+                    let j = bullets.length - 1;
+                    j >= 0;
+                    j--
+                ) {
+
+                    const b = bullets[j];
+
+                    const dx2 =
+                        b.x - a.x;
+
+                    const dy2 =
+                        b.y - a.y;
+
+                    const d2 =
+                        Math.hypot(dx2, dy2);
+
+                    if (d2 < a.size) {
+
+                        score += 100;
+
+                        scoreEl.textContent =
+                            score;
+
+                        explosion(a.x, a.y);
+
+                        if (a.size > 25) {
+
+                            createAsteroid(
+                                a.x,
+                                a.y,
+                                a.size / 2
+                            );
+
+                            createAsteroid(
+                                a.x,
+                                a.y,
+                                a.size / 2
+                            );
+                        }
+
+                        asteroids.splice(i, 1);
+
+                        releaseBullet(b);
+
+                        bullets.splice(j, 1);
+
+                        break;
+                    }
+                }
+            }
+
+            if (asteroids.length === 0) {
+
+                nextLevel();
+            }
+        }
+
+        /* =========================================================
+           WEBGL SHADERS
+        ========================================================= */
+
+        const vertexShader = `
+attribute vec2 position;
+
+uniform vec2 resolution;
+
+void main() {
+
+    vec2 zeroToOne =
+        position / resolution;
+
+    vec2 zeroToTwo =
+        zeroToOne * 2.0;
+
+    vec2 clipSpace =
+        zeroToTwo - 1.0;
+
+    gl_Position =
+        vec4(
+            clipSpace * vec2(1,-1),
+            0,
+            1
+        );
+}
+`;
+
+        const fragmentShader = `
+precision mediump float;
+
+void main() {
+
+    gl_FragColor =
+        vec4(1,1,1,1);
+}
+`;
+
+        function compile(type, source) {
+
+            const shader =
+                gl.createShader(type);
+
+            gl.shaderSource(
+                shader,
+                source
+            );
+
+            gl.compileShader(shader);
+
+            return shader;
+        }
+
+        const program =
+            gl.createProgram();
+
+        gl.attachShader(
+            program,
+            compile(
+                gl.VERTEX_SHADER,
+                vertexShader
+            )
+        );
+
+        gl.attachShader(
+            program,
+            compile(
+                gl.FRAGMENT_SHADER,
+                fragmentShader
+            )
+        );
+
+        gl.linkProgram(program);
+
+        gl.useProgram(program);
+
+        const positionLoc =
+            gl.getAttribLocation(
+                program,
+                "position"
+            );
+
+        const resolutionLoc =
+            gl.getUniformLocation(
+                program,
+                "resolution"
+            );
+
+        const buffer =
+            gl.createBuffer();
+
+        gl.bindBuffer(
+            gl.ARRAY_BUFFER,
+            buffer
+        );
+
+        gl.enableVertexAttribArray(
+            positionLoc
+        );
+
+        gl.vertexAttribPointer(
+            positionLoc,
+            2,
+            gl.FLOAT,
+            false,
+            0,
+            0
+        );
+
+        /* =========================================================
+           DRAW
+        ========================================================= */
+
+        function draw(vertices) {
+
+            gl.bufferData(
+
+                gl.ARRAY_BUFFER,
+
+                new Float32Array(vertices),
+
+                gl.STREAM_DRAW
+            );
+
+            gl.uniform2f(
+                resolutionLoc,
+                canvas.width,
+                canvas.height
+            );
+
+            gl.drawArrays(
+                gl.LINE_LOOP,
+                0,
+                vertices.length / 2
+            );
+        }
+
+        function rotatePoint(x, y, t) {
+
+            return [
+
+                t.x
+                +
+                x * Math.cos(t.rotation)
+                -
+                y * Math.sin(t.rotation),
+
+                t.y
+                +
+                x * Math.sin(t.rotation)
+                +
+                y * Math.cos(t.rotation)
+            ];
+        }
+
+        function render() {
+
+            gl.clear(gl.COLOR_BUFFER_BIT);
+
+            /* player */
+
+            const t =
+                ecs.get("transform")
+                    .get(player);
+
+            const ship = [
+
+                rotatePoint(18, 0, t),
+
+                rotatePoint(-12, -10, t),
+
+                rotatePoint(-8, 0, t),
+
+                rotatePoint(-12, 10, t)
+
+            ].flat();
+
+            draw(ship);
+
+            /* bullets */
+
+            for (const b of bullets) {
+
+                draw([
+
+                    b.x - 2,
+                    b.y - 2,
+
+                    b.x + 2,
+                    b.y - 2,
+
+                    b.x + 2,
+                    b.y + 2,
+
+                    b.x - 2,
+                    b.y + 2
+                ]);
+            }
+
+            /* asteroids */
+
+            for (const a of asteroids) {
+
+                const verts = [];
+
+                for (const v of a.verts) {
+
+                    verts.push(a.x + v.x);
+                    verts.push(a.y + v.y);
+                }
+
+                draw(verts);
+            }
+
+            /* particles */
+
+            for (const p of particles) {
+
+                draw([
+
+                    p.x,
+                    p.y,
+
+                    p.x + 1,
+                    p.y
+                ]);
+            }
+        }
+
+        /* =========================================================
+           GAME OVER
+        ========================================================= */
+
+        function gameOver() {
+
+            running = false;
+
+            finalScoreEl.textContent =
+                `Final Score: ${score}`;
+
+            gameOverEl.style.display =
+                "flex";
+        }
+
+        window.restartGame = function () {
+
+            location.reload();
+        };
+
+        /* =========================================================
+           LOOP
+        ========================================================= */
+
+        let last = performance.now();
+
+        function loop(now) {
+
+            const dt = Math.min(
+                (now - last) / 1000,
+                0.033
+            );
+
+            last = now;
+
+            update(dt);
+
+            render();
+
+            requestAnimationFrame(loop);
+        }
+
+        requestAnimationFrame(loop);
+
+    </script>
+
+</body>
+
+</html>
